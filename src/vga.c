@@ -1,13 +1,13 @@
 #include"vga.h"
 #include"types.h"
 
-volatile ushort* vga = (ushort*)0xB8000;
+volatile u16* vga = (u16*)0xB8000;
 
 static int row = 0;
 static int col = 0;
 
 void 
-print_vga_char(cchar c, int pos)
+print_vga_char(c8 c, int pos)
 {
   vga[pos] = (0x0F << 8) | c;
 }

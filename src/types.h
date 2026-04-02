@@ -1,9 +1,13 @@
-typedef unsigned int uint;
-typedef unsigned short ushort;
-typedef unsigned char uchar;
-typedef unsigned long ulong;
-typedef unsigned long long ulonglong;
+#pragma once
 
-typedef const char cchar;
-typedef const int cint;
-typedef const short cshort;
+#ifdef __x86_64__
+typedef unsigned long size_t;
+#else
+typedef unsigned int size_t;
+#endif
+
+typedef unsigned char u8;
+typedef unsigned short u16;
+typedef unsigned int u32;
+typedef unsigned long u64;
+

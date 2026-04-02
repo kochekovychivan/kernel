@@ -1,5 +1,6 @@
-#include"vga.h"
 #include"types.h"
+#include"vga.h"
+#include"string.h"
 
 void
 kernel_main(void)
