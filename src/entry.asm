@@ -1,19 +1,24 @@
-section .multiboot
-
-dd 0x1BADB002    
-dd 0x0          
-dd -(0x1BADB002) 
+BITS 32
 
 section .text
+	ALIGN 4
+	DD 0x1BADB002
+	DD 0x00000000
+	DD -(0x1BADB002 + 0x00000000)
 
-global _start
-
+global start
 extern kernel_main
 
-_start:
-	call kernel_main
-	cli
+start:
+	CLI
+	MOV esp, stack_space
+	CALL kernel_main
+	HLT
+HaltKernel:
+	CLI
+	HLT
+	JMP HaltKernel
 
-.hang:
-	hlt
-	jmp .hang
+section .bss
+RESB 8192
+stack_space:

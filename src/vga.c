@@ -7,7 +7,7 @@ static int row = 0;
 static int col = 0;
 
 void 
-print_vga_char(c8 c, int pos)
+print_vga_char(u8 c, int pos)
 {
   vga[pos] = (0x0F << 8) | c;
 }
