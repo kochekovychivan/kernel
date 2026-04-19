@@ -1,24 +1,29 @@
 BITS 32
 
 section .text
-	ALIGN 4
-	DD 0x1BADB002
-	DD 0x00000000
-	DD -(0x1BADB002 + 0x00000000)
+	align 4
+	dd 0x1BADB002
+	dd 0x00000003
+	dd -(0x1BADB002 + 0x00000003)
 
 global start
 extern kernel_main
 
 start:
-	CLI
-	MOV esp, stack_space
-	CALL kernel_main
-	HLT
+	cli
+	mov esp, stack_top
+	push ebx
+	push eax
+	call kernel_main
+	add esp, 8
+
 HaltKernel:
-	CLI
-	HLT
-	JMP HaltKernel
+	cli
+	hlt
+	jmp HaltKernel
 
 section .bss
-RESB 8192
-stack_space:
+align 16
+stack_bottom:
+    resb 8192
+stack_top:

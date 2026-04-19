@@ -1,7 +1,7 @@
-#include"types.h"
+#include"defs.h"
 
 void*
-memset(void* s, int c, size_t n)
+memset(const void* s, int c, size_t n)
 {
   u8* cur = (u8*)s;
 

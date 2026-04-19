@@ -1,15 +1,11 @@
-#include"types.h"
-#include"vga.h"
-#include"string.h"
+#include"defs.h"
 
 void
-kernel_main(void)
+kernel_main(u32 magic, struct multiboot_info* boot_info)
 {
-  print_vga_str("Hello, kernel!\n");
-
   clear_vga();
+  mem_init(boot_info);
 
-  print_vga_str("Screen has been cleared!\n");
   while(1) {asm volatile("hlt");}
 }
 

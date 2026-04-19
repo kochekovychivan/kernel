@@ -1,7 +1,6 @@
-#include"vga.h"
-#include"types.h"
+#include"defs.h"
 
-volatile u16* vga = (u16*)0xB8000;
+volatile u16* vga = (u16*)VIRTMEMSTART;
 
 static int row = 0;
 static int col = 0;
