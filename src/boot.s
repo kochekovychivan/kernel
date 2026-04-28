@@ -16,7 +16,9 @@ stack_top:
 .type start, @function
 start:
 	mov $stack_top, %esp
-	call kernel_main
+	push %ebx
+	push %eax
+	call kernel_main	
 	cli
 1:	hlt
 	jmp 1b

@@ -1,105 +1,121 @@
 #include"defs.h"
 
-static char* memory_start = end;        
+static char* memory_start;
 
-struct run 
-{
-  struct run* next;
-};
+static u32 bitmap[BITMAPARRSIZE];
 
-struct 
-{
+struct {
   struct spinlock lock;
-  int use_lock;
-  struct run* freelist;
+  u32 use_lock;
+  u32 free_pages;
 } kmem;
-
-void 
-kinit(void)
-{
-  kmem.freelist = 0;
-  kmem.use_lock = 0;
-  spin_init(&kmem.lock); 
-}
 
 void
 mem_init(struct multiboot_info* boot_info)
 {
-  kinit();
+  memset(bitmap, 0xFF, sizeof(bitmap));
 
-  for(u32 i = 0; i < boot_info->mmap_length; )
+  kmem.free_pages = 0;
+
+  if(!(boot_info->flags & (1 << 6))) panic("No memory map from multiboot");
+
+  for(u32 i = 0; i<boot_info->mmap_length; )
   {
-    struct multiboot_mmap_entry* mmmt = (struct multiboot_mmap_entry*)(boot_info->mmap_addr + i);
+	struct multiboot_mmap_entry* m = (struct multiboot_mmap_entry*)(boot_info->mmap_addr + i);
 
-	if(mmmt->type == 1)
+	if(m->size == 0) panic("mmap size 0");
+   
+    if(m->type == MULTIBOOT_MEMORY_AVAILABLE) 
 	{
-      u32 addr = mmmt->addr_low;
-	  u32 len = mmmt->len_low;
+	  u32 startp = PAGEROUNDUP(m->addr_low);
+	  u32 endp = PAGEROUNDDOWN((m->addr_low + m->len_low));
+	  u32 lim = (endp-startp) >> 12;
 
-      u32 startm = PAGEROUNDUP(addr);
-      u32 endm = PAGEROUNDDOWN(addr+len);
-
-	  if(endm <= (u32)memory_start) 
+	  for(u32 j = 0; j<lim; j++)
 	  {
-        i += mmmt->size + sizeof(mmmt->size);
-		continue;
-	  }
+	    u32 page = (startp+(j<<12)) >> 12;
 
-      if(startm < (u32)memory_start) startm = (u32)memory_start;
-	  if(startm < endm) range_free((void*)startm, (void*)endm);
+		if(page < TOTALPAGES)
+		{
+          u32 idx = page >> 5; 
+		  u32 bit = page & 31;
+
+		  bitmap[idx] &= ~(1<<bit); 
+          kmem.free_pages++;
+		}
+	  }
 	}
-	i += mmmt->size + sizeof(mmmt->size);
+
+	i += m->size + sizeof(m->size); 
   }
 
   kmem.use_lock = 1;
+  spin_init(&kmem.lock);
+
+  memory_start = (char*)PAGEROUNDUP((u32)end);
+
+  for(u32 i = 0; i < (u32)memory_start; i += PAGESIZE)
+  {
+    u32 page = i >> 12;
+    u32 idx = page >> 5;
+	u32 bit = page & 31;
+
+    bitmap[idx] |= (1 << bit);
+
+	kmem.free_pages--;
+  }
+
 }
 
 void
 page_free(void* p)
 {
-  struct run* r;
+  if((u32)p % PAGESIZE || (char*)p < memory_start || ((u32)p >> 12) >= TOTALPAGES) panic("Failed to free a page!\n"); 
 
-  if((u32)p % PAGESIZE || p < (void*)memory_start) return;
-
-  memset(p, 1, PAGESIZE);
-
-  r = (struct run*)p;
-  
   if(kmem.use_lock) spin_lock(&kmem.lock);
 
-  r->next = kmem.freelist;
-  kmem.freelist = r;
+  u32 tmp = (u32)p >> 12;
+  u32 idx = tmp >> 5;
+  u32 bit = tmp & 31; 
+
+  if(!((bitmap[idx] >> bit) & 1))
+  {
+    if(kmem.use_lock) spin_unlock(&kmem.lock);
+    panic("double free");
+  }
+  bitmap[idx] &= ~(1<<bit);
+
+  kmem.free_pages++;
 
   if(kmem.use_lock) spin_unlock(&kmem.lock);
 }
-
-void 
-range_free(void* pstart, void* pend)
-{
-  char* s = (char*)PAGEROUNDUP((u32)pstart);
-  char* e = (char*)PAGEROUNDDOWN((u32)pend);
-
-  while(s < e)
-  {
-    page_free(s);
-	s += PAGESIZE;
-  }
-}
-
 
 void*
 page_alloc(void)
 {
-  struct run* r;
+  if(kmem.free_pages <= 0) return NULL;
 
   if(kmem.use_lock) spin_lock(&kmem.lock);
 
-  r = kmem.freelist;
-  if(r) kmem.freelist = r->next;
+  for(u32 i = ((u32)memory_start >> 12); i<TOTALPAGES; i++)
+  {
+    u32 idx = i >> 5;
+    u32 bit = i & 31;
+
+    if(!((bitmap[idx] >> bit) & 1)) 
+	{
+      bitmap[idx] |= (1 << bit);
+
+	  kmem.free_pages--;
+	  
+	  if(kmem.use_lock) spin_unlock(&kmem.lock);
+	  
+	  return (void*)(i << 12);
+	}
+  }
 
   if(kmem.use_lock) spin_unlock(&kmem.lock);
-
-  if(!r) return 0; 
-
-  return (void*)r;
+  return NULL;
 }
+
+

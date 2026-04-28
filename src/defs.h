@@ -10,7 +10,6 @@ typedef unsigned int size_t;
 typedef unsigned char u8;
 typedef unsigned short u16;
 typedef unsigned int u32;
-typedef unsigned long u64;
 
 //--------------------------------------------------------\\
 
@@ -23,8 +22,12 @@ extern char end[];
 #define PTOV(a) ((void*)(((char*)(a)) + VIRTMEMSTART))
 
 #define PAGESIZE 4096
+#define BITMAPARRSIZE 32768
+#define TOTALPAGES 1048576
 #define PAGEROUNDUP(sz)  (((sz)+PAGESIZE-1) & ~(PAGESIZE-1))
 #define PAGEROUNDDOWN(a) (((a)) & ~(PAGESIZE-1))
+
+#define NULL 0
 
 //--------------------------------------------------------\\
 
@@ -115,22 +118,16 @@ void
 clear_vga(void);                               // vga.c
 
 void*
-memset(const void* s, int c, size_t n);        // string.c
+memset(void* s, int c, size_t n);              // string.c
 
 void*
 memcpy(void* d, const void* s, size_t n);      // string.c
-
-void
-kinit(void);                                   // pmm.c
 
 void
 mem_init(struct multiboot_info* boot_info);    // pmm.c
 
 void
 page_free(void* p);                            // pmm.c
-
-void
-range_free(void* pstart, void* pend);          // pmm.c
 
 void*
 page_alloc(void);                              // pmm.c
@@ -147,8 +144,8 @@ spin_unlock(struct spinlock *lk);              // spinlock.c
 void
 spin_init(struct spinlock *lk);                // spinlock.c
 
-
-
+void
+panic(const char* msg);                        // debug.c
 
 
 
