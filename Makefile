@@ -36,14 +36,17 @@ $(BUILD_DIR)/boot.o: $(SRC_DIR)/boot.s | $(BUILD_DIR)
 $(BUILD_DIR)/debug.o: $(SRC_DIR)/debug.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(KO_DIR)/kernel: $(BUILD_DIR)/kmain.o $(BUILD_DIR)/boot.o $(BUILD_DIR)/vga.o $(BUILD_DIR)/string.o $(BUILD_DIR)/spinlock.o $(BUILD_DIR)/pmm.o $(BUILD_DIR)/debug.o
+$(BUILD_DIR)/vmm.o: $(SRC_DIR)/vmm.c | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(KO_DIR)/kernel: $(BUILD_DIR)/kmain.o $(BUILD_DIR)/boot.o $(BUILD_DIR)/vga.o $(BUILD_DIR)/string.o $(BUILD_DIR)/spinlock.o $(BUILD_DIR)/pmm.o $(BUILD_DIR)/debug.o $(BUILD_DIR)/vmm.o
 	$(LD) -T $(SRC_DIR)/linker.ld -nostdlib -o $@ $^
 
 kernel.iso: $(KO_DIR)/kernel
 	grub-mkrescue -o kernel.iso $(CONF_DIR)
 
 run: kernel.iso
-	qemu-system-x86_64 -cdrom kernel.iso
+	qemu-system-i386 -cdrom kernel.iso
 
 clean:
 	rm -rf $(BUILD_DIR)/* 

@@ -10,6 +10,7 @@ typedef unsigned int size_t;
 typedef unsigned char u8;
 typedef unsigned short u16;
 typedef unsigned int u32;
+typedef unsigned long long u64;
 
 //--------------------------------------------------------\\
 
@@ -104,6 +105,24 @@ struct multiboot_mmap_entry
   u32 type;
 } __attribute__((packed));
 
+enum Color
+{
+  RED,
+  BLACK
+};
+
+struct node
+{
+  void* start;
+  u32 size; // free pages
+  struct node* left;
+  struct node* right;
+  struct node* parent;
+  enum Color color;
+
+  struct node* next;
+};
+
 
 //--------------------------------------------------------\\
 
@@ -123,8 +142,8 @@ memset(void* s, int c, size_t n);              // string.c
 void*
 memcpy(void* d, const void* s, size_t n);      // string.c
 
-void
-mem_init(struct multiboot_info* boot_info);    // pmm.c
+void*
+pmm_init(struct multiboot_info* boot_info);    // pmm.c
 
 void
 page_free(void* p);                            // pmm.c
@@ -132,8 +151,11 @@ page_free(void* p);                            // pmm.c
 void*
 page_alloc(void);                              // pmm.c
 
-static inline u32
-xchg(volatile u32* addr, u32 new_val);         // spinlock.c
+u32
+page_check(u32 i);                             // pmm.c
+
+u32
+region_size(u32 i);                            // pmm.c
 
 void
 spin_lock(struct spinlock *lk);                // spinlock.c
@@ -147,9 +169,6 @@ spin_init(struct spinlock *lk);                // spinlock.c
 void
 panic(const char* msg);                        // debug.c
 
-
-
-
-
-
+struct node*
+vmm_init(struct multiboot_info* boot_info);    // vmm.c
 
