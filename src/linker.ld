@@ -20,8 +20,12 @@ SECTIONS
 	}
 	.bss BLOCK(4K) : ALIGN(4K)
 	{
-		*(COMMON)
 		*(.bss)
+    	*(COMMON)
+
+		stack_bottom = .; 
+		. += 0x4000; 
+		stack_top = .;
 	}
 
     end = .;

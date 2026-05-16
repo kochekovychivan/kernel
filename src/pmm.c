@@ -23,7 +23,7 @@ reserve_region(u32 start, u32 size)
   } 
 }
        
-void*
+void
 pmm_init(struct multiboot_info* boot_info)
 {
   kernel_start = (char*)PAGEROUNDDOWN(0x200000);
@@ -61,36 +61,12 @@ pmm_init(struct multiboot_info* boot_info)
   reserve_region((u32)kernel_start, (u32)kernel_end - (u32)kernel_start);
   reserve_region((u32)boot_info, sizeof(struct multiboot_info));
   reserve_region(boot_info->mmap_addr, boot_info->mmap_length);
-
-  u32 run = 0;
-  u32 start = 0;
-  
-  for(u32 i = 0; i<TOTALPAGES; i++)
-  {
-    if(!((bitmap[i >> 5] >> (i & 31)) & 1))
-    {
-      if(run == 0) start = i;
-
-      run++;
-      
-      if(run == 256)
-      {
-	    reserve_region(start << 12, 256 * PAGESIZE);
-        kmem.use_lock = 1;
-        spin_init(&kmem.lock);
-        print_vga_str("PMM Initialized\n");
-        return (void*)(start << 12);  	
-      }
-    }
-	else 
-    {
-      run = 0;
-    }
-  }
+ 
+  bitmap[0 >> 5] |= (1 << (0 & 31));
 
   kmem.use_lock = 1;
   spin_init(&kmem.lock); 
-  return NULL;
+  print_vga_str("PMM Initialized\n"); 
 }
 
 void
@@ -121,7 +97,7 @@ page_alloc(void)
 
   for(u32 i = 0; i<TOTALPAGES; i++)
   {
-    if(!((bitmap[i >> 5] >> (i & 31)) & 1)) 
+    if(!(bitmap[i >> 5] & (1 << (i & 31)))) 
 	{
       bitmap[i >> 5] |= (1 << (i & 31));
 
@@ -135,22 +111,3 @@ page_alloc(void)
   return NULL;
 }
 
-u32
-page_check(u32 i)
-{ 
-  return !((bitmap[i >> 5] >> (i & 31)) & 1);
-}
-
-// only for free reg
-// use page_check() first
-u32
-region_size(u32 i)
-{
-  u32 size = 0;
-  while(i<TOTALPAGES && page_check(i))
-  {
-    size++;
-    i++;
-  }
-  return size;
-}

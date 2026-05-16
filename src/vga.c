@@ -1,6 +1,6 @@
 #include"defs.h"
 
-volatile u16* vga = (u16*)VIRTMEMSTART;
+volatile u16* vga = (u16*)VGAADDR;
 
 static int row = 0;
 static int col = 0;

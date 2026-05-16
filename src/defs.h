@@ -16,17 +16,22 @@ typedef unsigned long long u64;
 
 //                          !! MACRO !!
 extern char end[];
+extern char stack_bottom[];
+extern char stack_top[];
 
-#define VIRTMEMSTART   0xB8000
-
-#define VTOP(a) (((u32)(a)) - VIRTMEMSTART) 
-#define PTOV(a) ((void*)(((char*)(a)) + VIRTMEMSTART))
+#define VGAADDR   0xB8000
 
 #define PAGESIZE 4096
+#define PDESIZE 1024
+#define PTESIZE 1024
 #define BITMAPARRSIZE 32768
 #define TOTALPAGES 1048576
 #define PAGEROUNDUP(sz)  (((sz)+PAGESIZE-1) & ~(PAGESIZE-1))
 #define PAGEROUNDDOWN(a) (((a)) & ~(PAGESIZE-1))
+
+#define KERNEL_BASE 0xC0000000
+#define PTOV(x) ((void*)((u32)(x) + KERNEL_BASE))
+#define VTOP(x) ((u32)(x) - KERNEL_BASE)
 
 #define NULL 0
 
@@ -142,7 +147,7 @@ memset(void* s, int c, size_t n);              // string.c
 void*
 memcpy(void* d, const void* s, size_t n);      // string.c
 
-void*
+void
 pmm_init(struct multiboot_info* boot_info);    // pmm.c
 
 void
@@ -150,12 +155,6 @@ page_free(void* p);                            // pmm.c
 
 void*
 page_alloc(void);                              // pmm.c
-
-u32
-page_check(u32 i);                             // pmm.c
-
-u32
-region_size(u32 i);                            // pmm.c
 
 void
 spin_lock(struct spinlock *lk);                // spinlock.c
@@ -169,6 +168,16 @@ spin_init(struct spinlock *lk);                // spinlock.c
 void
 panic(const char* msg);                        // debug.c
 
-struct node*
-vmm_init(struct multiboot_info* boot_info);    // vmm.c
+void
+vmm_init(void);                                // vmm.c
+
+void
+map(u32 virt, u32 phys, u32 flags);            // vmm.c
+
+void
+unmap(u32 virt);                               // vmm.c
+
+void
+identity_map(u32 start, u32 end, u32 flags);   // vmm.c
+
 

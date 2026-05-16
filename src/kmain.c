@@ -5,7 +5,8 @@ kernel_main(u32 magic, struct multiboot_info* boot_info)
 {
   clear_vga();
   print_vga_str("Kernel starting...\n");
-  vmm_init(boot_info);
+  pmm_init(boot_info);  
+  vmm_init();
 
   for(;;) __asm__ volatile("hlt");
 }

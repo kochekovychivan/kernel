@@ -1,225 +1,109 @@
 #include"defs.h"
 
-#define NODESPERPAGE (PAGESIZE / sizeof(struct node))
+static char* kernel_start;
+static char* kernel_end; 
 
-void* ptr;
-struct node* vmmroot;
+typedef u32 pde;
+typedef u32 pte;
 
-static struct node* freelist;
-
-static void
-pool_init(void)
-{
-  void* page = ptr;
-
-  ptr = (char*)ptr + PAGESIZE;
-
-  struct node* nodes = (struct node*)page;
-
-  for(u32 i = 0; i<NODESPERPAGE-1; i++)
-  {
-    nodes[i].next = &nodes[i+1];
-  }
-
-  nodes[NODESPERPAGE-1].next = NULL;
-  freelist = &nodes[0];
-}
+pde* page_dir;
 
 static void
-pool_grow(void)
+paging_enable(void)
 {
-  void* page = ptr;
-   
-  ptr = (char*)ptr + PAGESIZE;
-  
-  struct node* nodes = (struct node*)page;
+  u32 cr0;
+  __asm__ volatile("mov %%cr0, %0" : "=r"(cr0));
 
-  for(u32 i = 0; i<NODESPERPAGE-1; i++)
-  {
-    nodes[i].next = &nodes[i+1];
-  }
-
-  nodes[NODESPERPAGE-1].next = freelist;
-  freelist = &nodes[0];
-}
-
-static struct node*
-node_alloc(void)
-{
-  if(!freelist) pool_grow();
-
-  struct node* n = freelist;
-  freelist = freelist->next;
-
-  memset(n, 0, sizeof(*n));
-  return n; 
-}
-
-static void
-node_free(struct node* n)
-{
-  n->next = freelist;
-  freelist = n;
-}
-
-static struct node* 
-node_create(void* start, u32 size) 
-{
-  struct node* n = node_alloc();
-  n->start = start;
-  n->size = size;
-  n->color = RED;
-  n->left = NULL;
-  n->right = NULL;
-  n->parent = NULL;
-  return n;
-}
-
-static struct node* 
-grandparent(struct node* n) 
-{
-  if(n && n->parent) return n->parent->parent;
-  return NULL;
-}
-
-static struct node* 
-uncle(struct node* n) 
-{
-  struct node* g = grandparent(n);
-  if(!g) return NULL;
-  if(n->parent == g->left) return g->right;
-  else return g->left;
-}
-
-void 
-rotate_left(struct node** root, struct node* n) 
-{
-  struct node* y = n->right;
-  n->right = y->left;
-  if(y->left) y->left->parent = n;
-  y->parent = n->parent;
-  if(!n->parent) *root = y;
-  else if(n == n->parent->left) n->parent->left = y;
-  else n->parent->right = y;
-  y->left = n;
-  n->parent = y;
+  cr0 |= (1 << 31);
+  __asm__ volatile("mov %0, %%cr0" :: "r"(cr0));
 }
 
 void
-rotate_right(struct node** root, struct node* n) 
+page_fault_handler(void)
 {
-  struct node* y = n->left;
-  n->left = y->right;
-  if(y->right) y->right->parent = n;
-  y->parent = n->parent;
-  if(!n->parent) *root = y;
-  else if(n == n->parent->right) n->parent->right = y;
-  else n->parent->left = y;
-  y->right = n;
-  n->parent = y;
+  u32 fault_addr;
+  __asm__ volatile("mov %%cr2, %0" : "=r"(fault_addr));
+
+  panic("Page fault!\n");
 }
 
-static void 
-insert_fix(struct node** root, struct node* n) 
+void
+vmm_init(void)
 {
-  while(n != *root && n->parent && n->parent->color == RED)
-  {
-    struct node* g = grandparent(n);
+  kernel_start = (char*)PAGEROUNDDOWN(0x200000);
+  kernel_end = (char*)PAGEROUNDUP((u32)&end);
 
-    if(!g) break;
-
-    struct node* u = uncle(n);
-
-    if(u && u->color == RED)
-    {
-      n->parent->color = BLACK;
-      u->color = BLACK;
-      g->color = RED;
-      n = g;
-    }
-    else
-    {
-      if(n->parent == g->left)
-      {
-        if(n == n->parent->right)
-        {
-          n = n->parent;
-          rotate_left(root, n);
-        }
-
-        n->parent->color = BLACK;
-        g->color = RED;
-        rotate_right(root, g);
-      }
-      else
-      {
-        if(n == n->parent->left)
-        {
-          n = n->parent;
-          rotate_right(root, n);
-        }
-
-        n->parent->color = BLACK;
-        g->color = RED;
-        rotate_left(root, g);
-      }
-    }
-  }
-
-  (*root)->color = BLACK;
-}
-
-static struct node*
-insert(struct node* root, void* start, u32 size)
-{
-  struct node* n = node_create(start, size);
-  if(!root)
-  {
-    n->color = BLACK;
-    return n;
-  }
-  struct node* cur = root;
-  struct node* parent = NULL;
-
-  while(cur)
-  {
-    parent = cur;
-    if(start < cur->start) cur = cur->left;
-    else cur = cur->right;
-  }
-  n->parent = parent;
-
-  if(start < parent->start) parent->left = n;
-  else parent->right = n;
-
-  insert_fix(&root, n);
-
-  while(root->parent) root = root->parent;
-  return root;
-}
-
-struct node*
-vmm_init(struct multiboot_info* boot_info)
-{
-  ptr = pmm_init(boot_info);
-  pool_init();  
-
-  if(!ptr) panic("pmm_init returned NULL!\n");
-
-  vmmroot = NULL;
-   
-  for(u32 i = 0; i<TOTALPAGES; i++)
-  {
-    if(page_check(i))
-    {
-      void* start = (void*)(i << 12);
-      u32 size = region_size(i);
-      vmmroot = insert(vmmroot, start, size);
-      i+=size-1;
-    }
-  }
+  page_dir = page_alloc();
+  if(!page_dir) panic("Failed to alloc a page for page directory!\n");
   
+  memset(page_dir, 0, PAGESIZE);
+
+  identity_map(0x0, 0x400000, 0x3);
+  identity_map((u32)&stack_bottom, (u32)&stack_top, 0x3);
+  identity_map(0xB8000, 0xB8FFF, 0x3);
+
+  __asm__ volatile("mov %0, %%cr3" :: "r"(page_dir));
+
+  paging_enable();
+
   print_vga_str("VMM Initialized\n");
- 
-  return vmmroot;
 }
+
+static pte* 
+pt_get(u32 virt, int crt)
+{
+  u32 pd_idx = virt >> 22;
+  pde entry = page_dir[pd_idx];
+ 
+  if(entry & 1) return (pte*)(entry & 0xFFFFF000);
+  if(!crt) return NULL;
+  
+  pte* pt = (pte*)page_alloc();
+  if(!pt) panic("Failed to alloc a page for page table!\n"); 
+
+  memset(pt, 0, PAGESIZE);
+
+  page_dir[pd_idx] = (((u32)pt) & 0xFFFFF000) | 0x3;
+
+  return pt;
+}
+
+static inline void
+tlb_invalidate(u32 virt)
+{
+  __asm__ volatile("invlpg (%0)" :: "r"(virt) : "memory");
+}
+
+void
+map(u32 virt, u32 phys, u32 flags)
+{
+  pte* pt = pt_get(virt, 1);
+  u32 pt_idx = (virt >> 12) & 0x3FF;
+
+  pt[pt_idx] = (phys & 0xFFFFF000) | flags;
+
+  tlb_invalidate(virt);
+}
+
+void
+unmap(u32 virt)
+{
+  pte* pt = pt_get(virt, 0);
+  if(!pt) return;
+
+  u32 pt_idx = (virt >> 12) & 0x3FF;
+  pt[pt_idx] = 0;
+  
+  tlb_invalidate(virt); 
+}
+
+void
+identity_map(u32 start, u32 end, u32 flags)
+{
+  start = PAGEROUNDDOWN(start);
+  end = PAGEROUNDUP(end);
+
+  for(u32 addr = start; addr < end; addr += PAGESIZE) map(addr, addr, flags);
+}
+
+
