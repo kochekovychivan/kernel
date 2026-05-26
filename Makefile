@@ -48,6 +48,9 @@ kernel.iso: $(KO_DIR)/kernel
 run: kernel.iso
 	qemu-system-i386 -cdrom kernel.iso
 
+debug:
+	qemu-system-i386 -cdrom kernel.iso -no-reboot -no-shutdown -d int,cpu_reset
+
 clean:
 	rm -rf $(BUILD_DIR)/* 
 	rm kernel.iso

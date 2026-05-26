@@ -1,6 +1,5 @@
 #include"defs.h"
 
-static char* kernel_start;
 static char* kernel_end; 
 
 static u32 bitmap[BITMAPARRSIZE];
@@ -26,8 +25,7 @@ reserve_region(u32 start, u32 size)
 void
 pmm_init(struct multiboot_info* boot_info)
 {
-  kernel_start = (char*)PAGEROUNDDOWN(0x200000);
-  kernel_end = (char*)PAGEROUNDUP((u32)end);
+  kernel_end = (char*)PAGEROUNDUP((u32)&_kernel_end);
   memset(bitmap, 0xFF, sizeof(bitmap));
 
   if(!(boot_info->flags & (1 << 6))) panic("No memory map from multiboot");
@@ -58,10 +56,12 @@ pmm_init(struct multiboot_info* boot_info)
 	i += m->size + sizeof(m->size); 
   }
 
-  reserve_region((u32)kernel_start, (u32)kernel_end - (u32)kernel_start);
+  reserve_region(VTOP(KERNELSTART), (u32)kernel_end - KERNELSTART);
   reserve_region((u32)boot_info, sizeof(struct multiboot_info));
   reserve_region(boot_info->mmap_addr, boot_info->mmap_length);
- 
+  reserve_region(VTOP((u32)boot_page_directory), PAGESIZE);
+  reserve_region(VTOP((u32)boot_page_table1), PAGESIZE);
+
   bitmap[0 >> 5] |= (1 << (0 & 31));
 
   kmem.use_lock = 1;

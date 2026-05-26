@@ -1,50 +1,32 @@
 #include"defs.h"
 
-static char* kernel_start;
 static char* kernel_end; 
+static u32* bootpg_dir;
 
 typedef u32 pde;
 typedef u32 pte;
 
 pde* page_dir;
 
-static void
-paging_enable(void)
+static inline void
+cr3_reload(void)
 {
-  u32 cr0;
-  __asm__ volatile("mov %%cr0, %0" : "=r"(cr0));
+  u32 cr3;
 
-  cr0 |= (1 << 31);
-  __asm__ volatile("mov %0, %%cr0" :: "r"(cr0));
-}
-
-void
-page_fault_handler(void)
-{
-  u32 fault_addr;
-  __asm__ volatile("mov %%cr2, %0" : "=r"(fault_addr));
-
-  panic("Page fault!\n");
+  __asm__ volatile("mov %%cr3, %0" : "=r"(cr3));
+  __asm__ volatile("mov %0, %%cr3" : : "r"(cr3) : "memory");
 }
 
 void
 vmm_init(void)
 {
-  kernel_start = (char*)PAGEROUNDDOWN(0x200000);
-  kernel_end = (char*)PAGEROUNDUP((u32)&end);
+  kernel_end = PAGEROUNDUP((u32)&_kernel_end);
+ 
+  page_dir = (pde*)boot_page_directory;
 
-  page_dir = page_alloc();
-  if(!page_dir) panic("Failed to alloc a page for page directory!\n");
-  
-  memset(page_dir, 0, PAGESIZE);
+  page_dir[1023] = ((u32)page_dir) | PAGEPRESENT | PAGERW;
 
-  identity_map(0x0, 0x400000, 0x3);
-  identity_map((u32)&stack_bottom, (u32)&stack_top, 0x3);
-  identity_map(0xB8000, 0xB8FFF, 0x3);
-
-  __asm__ volatile("mov %0, %%cr3" :: "r"(page_dir));
-
-  paging_enable();
+  cr3_reload();
 
   print_vga_str("VMM Initialized\n");
 }
@@ -53,19 +35,22 @@ static pte*
 pt_get(u32 virt, int crt)
 {
   u32 pd_idx = virt >> 22;
-  pde entry = page_dir[pd_idx];
  
-  if(entry & 1) return (pte*)(entry & 0xFFFFF000);
-  if(!crt) return NULL;
-  
-  pte* pt = (pte*)page_alloc();
-  if(!pt) panic("Failed to alloc a page for page table!\n"); 
+  if(!(page_dir[pd_idx] & PAGEPRESENT))
+  {
+    if(!crt) return NULL;
 
-  memset(pt, 0, PAGESIZE);
+	u32 p = (u32)page_alloc();
+	if(!p) panic("Failed to alloc a page for page table!\n");
 
-  page_dir[pd_idx] = (((u32)pt) & 0xFFFFF000) | 0x3;
+	memset((void*)PTOV(p), 0, PAGESIZE);
 
-  return pt;
+	page_dir[pd_idx] = p | PAGEPRESENT | PAGERW;
+	
+	cr3_reload();
+  }
+
+  return (pte*)(0xFFC00000 + (pd_idx << 12));
 }
 
 static inline void

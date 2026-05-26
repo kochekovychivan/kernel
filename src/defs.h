@@ -15,11 +15,11 @@ typedef unsigned long long u64;
 //--------------------------------------------------------\\
 
 //                          !! MACRO !!
-extern char end[];
-extern char stack_bottom[];
-extern char stack_top[];
+extern char _kernel_end[];
+extern u32 boot_page_directory[];
+extern u32 boot_page_table1[];
 
-#define VGAADDR   0xB8000
+#define VGAADDR 0xC03FF000
 
 #define PAGESIZE 4096
 #define PDESIZE 1024
@@ -29,9 +29,13 @@ extern char stack_top[];
 #define PAGEROUNDUP(sz)  (((sz)+PAGESIZE-1) & ~(PAGESIZE-1))
 #define PAGEROUNDDOWN(a) (((a)) & ~(PAGESIZE-1))
 
-#define KERNEL_BASE 0xC0000000
-#define PTOV(x) ((void*)((u32)(x) + KERNEL_BASE))
-#define VTOP(x) ((u32)(x) - KERNEL_BASE)
+#define KERNELSTART 0xC0000000
+#define PTOV(x) ((void*)((u32)(x) + KERNELSTART))
+#define VTOP(x) ((u32)(x) - KERNELSTART)
+
+#define PAGEPRESENT 0x001
+#define PAGERW 0x002
+#define PAGEUSER 0x004
 
 #define NULL 0
 
